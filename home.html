@@ -21,40 +21,34 @@
   <div class="step-indicator">
     <div class="step-dot" id="dot1">1</div>
     <div class="step-dot" id="dot2">2</div>
-    <div class="step-dot" id="dot3">3</div>
   </div>
 
   <div class="card wizard-card">
     <div id="msgBox"></div>
 
-    <!-- STEP 1: yemek seç -->
+    <!-- STEP 1: yemek seç + üretilecek miktar -->
     <div id="step1">
       <h2 class="wizard-title">Hangi yemeği hesaplıyorsun?</h2>
       <p class="wizard-sub">Aşağıdan bir yemek seç.</p>
       <div class="recipe-grid" id="recipeGrid">
         <div class="muted">Yükleniyor...</div>
       </div>
+
+      <div class="form-row" style="justify-content:center; margin-top:18px">
+        <div style="max-width:220px">
+          <label>Üretilecek Miktar (kg)</label>
+          <input type="number" step="0.01" min="0" id="outputQty" placeholder="Örn: 5">
+        </div>
+      </div>
     </div>
 
-    <!-- STEP 2: malzeme miktarları -->
+    <!-- STEP 2: malzeme miktarları + sonuç -->
     <div id="step2" style="display:none">
       <h2 class="wizard-title" id="step2Title">Malzemeler</h2>
       <p class="wizard-sub">Bu üretimde kullandığın malzeme miktarlarını gir.</p>
       <div id="ingredientRows"></div>
-    </div>
 
-    <!-- STEP 3: üretilen miktar + sonuç -->
-    <div id="step3" style="display:none">
-      <h2 class="wizard-title">Üretilen toplam miktar</h2>
-      <p class="wizard-sub">Bu, kaç kg yemek çıktığıdır. Malzeme toplamına göre otomatik dolduruldu, istersen değiştirebilirsin.</p>
-      <div class="form-row" style="justify-content:center">
-        <div style="max-width:200px">
-          <label>Üretilen Miktar (kg)</label>
-          <input type="number" step="0.01" min="0" id="outputQty">
-        </div>
-      </div>
-
-      <div id="resultBox" class="result-box result-summary" style="display:none; text-align:left;">
+      <div id="resultBox" class="result-box result-summary" style="display:none; text-align:left; margin-top:18px;">
         <div>Toplam Malzeme Maliyeti: <strong id="totalCost">-</strong></div>
         <div style="margin-top:10px">1 kg Yemek Maliyeti</div>
         <div class="big" id="perKgCost">-</div>
@@ -150,25 +144,11 @@ async function loadRecipeIngredients() {
   return true;
 }
 
-function prefillOutputQty() {
-  // Sum quantities of kg-based ingredients as a sensible default; editable by user.
-  const rows = document.querySelectorAll(".ing-qty");
-  let sum = 0;
-  rows.forEach((input, idx) => {
-    const unit = recipeItems[idx]?.unit;
-    const val = parseFloat(input.value) || 0;
-    if (unit === "kg" || unit === "lt") sum += val;
-  });
-  document.getElementById("outputQty").value = sum > 0 ? sum.toFixed(2) : "";
-  document.getElementById("resultBox").style.display = "none";
-}
-
 function updateStepView() {
   document.getElementById("step1").style.display = currentStep === 1 ? "block" : "none";
   document.getElementById("step2").style.display = currentStep === 2 ? "block" : "none";
-  document.getElementById("step3").style.display = currentStep === 3 ? "block" : "none";
 
-  [1, 2, 3].forEach(n => {
+  [1, 2].forEach(n => {
     const dot = document.getElementById("dot" + n);
     dot.classList.remove("active", "done");
     if (n === currentStep) dot.classList.add("active");
@@ -176,7 +156,7 @@ function updateStepView() {
   });
 
   document.getElementById("backBtn").style.visibility = currentStep === 1 ? "hidden" : "visible";
-  document.getElementById("nextBtn").textContent = currentStep === 3 ? "Hesapla" : "İleri";
+  document.getElementById("nextBtn").textContent = currentStep === 2 ? "Hesapla" : "İleri";
   document.getElementById("msgBox").innerHTML = "";
 }
 
@@ -189,7 +169,13 @@ document.getElementById("nextBtn").addEventListener("click", async () => {
       msgBox.innerHTML = `<div class="msg error">Devam etmek için bir yemek seç.</div>`;
       return;
     }
-    const ok = await loadRecipeIngredients();
+    const outputQty = parseFloat(document.getElementById("outputQty").value);
+    if (!outputQty || outputQty <= 0) {
+      msgBox.innerHTML = `<div class="msg error">Üretilecek miktarı gir (kg).</div>`;
+      return;
+    }
+    await loadRecipeIngredients();
+    document.getElementById("resultBox").style.display = "none";
     currentStep = 2;
     updateStepView();
     return;
@@ -203,18 +189,8 @@ document.getElementById("nextBtn").addEventListener("click", async () => {
     document.querySelectorAll(".ing-qty").forEach((input, idx) => {
       recipeItems[idx].quantity = parseFloat(input.value) || 0;
     });
-    prefillOutputQty();
-    currentStep = 3;
-    updateStepView();
-    return;
-  }
 
-  if (currentStep === 3) {
     const outputQty = parseFloat(document.getElementById("outputQty").value);
-    if (!outputQty || outputQty <= 0) {
-      msgBox.innerHTML = `<div class="msg error">Üretilen miktarı gir (kg).</div>`;
-      return;
-    }
     const total = recipeItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
     const perKg = total / outputQty;
     document.getElementById("totalCost").textContent = total.toFixed(2) + " TL";
