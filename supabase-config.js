@@ -20,7 +20,7 @@ async function requireAuth() {
 async function redirectIfLoggedIn() {
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (session) {
-    window.location.href = "ingredients.html";
+    window.location.href = "home.html";
   }
 }
 
