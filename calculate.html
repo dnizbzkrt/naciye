@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hesapla - Naciye</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <h1>🍲 Naciye</h1>
+  <div class="nav">
+    <a href="ingredients.html">Malzemeler</a>
+    <a href="recipes.html">Yemekler</a>
+    <a href="calculate.html" class="active">Hesapla</a>
+  </div>
+  <button id="logoutBtn">Çıkış</button>
+</div>
+
+<div class="container">
+  <div class="card">
+    <h2>Maliyet Hesapla</h2>
+    <div id="msgBox"></div>
+
+    <div class="form-row">
+      <div>
+        <label>Yemek Seç</label>
+        <select id="recipeSelect">
+          <option value="">-- Seç --</option>
+        </select>
+      </div>
+      <div>
+        <label>Üretilen Miktar (kg)</label>
+        <input type="number" step="0.01" min="0" id="outputQty" placeholder="Örn: 5">
+      </div>
+    </div>
+
+    <div id="ingredientInputs"></div>
+
+    <button type="button" class="btn" id="calcBtn" style="margin-top:10px">Hesapla</button>
+
+    <div id="resultBox" class="result-box" style="display:none">
+      <div>Toplam Malzeme Maliyeti: <strong id="totalCost">-</strong></div>
+      <div>Toplam Üretim Maliyeti: <strong id="prodCost">-</strong></div>
+      <div style="margin-top:8px">1 kg Yemek Maliyeti: <span class="big" id="perKgCost">-</span></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script>
+let recipes = [];
+let ingredientsById = {};
+
+async function init() {
+  const session = await requireAuth();
+  if (!session) return;
+  setupLogoutButton();
+  await loadData();
+}
+
+async function loadData() {
+  const { data: ings } = await supabaseClient.from("ingredients").select("*");
+  (ings || []).forEach(i => ingredientsById[i.id] = i);
+
+  const { data: rs } = await supabaseClient.from("recipes").select("*").order("name");
+  recipes = rs || [];
+
+  const select = document.getElementById("recipeSelect");
+  select.innerHTML = `<option value="">-- Seç --</option>` +
+    recipes.map(r => `<option value="${r.id}">${r.name}</option>`).join("");
+}
+
+document.getElementById("recipeSelect").addEventListener("change", async (e) => {
+  const recipeId = e.target.value;
+  const wrap = document.getElementById("ingredientInputs");
+  document.getElementById("resultBox").style.display = "none";
+  wrap.innerHTML = "";
+
+  if (!recipeId) return;
+
+  const { data: items, error } = await supabaseClient
+    .from("recipe_ingredients")
+    .select("*, ingredients(*)")
+    .eq("recipe_id", recipeId);
+
+  if (error) {
+    document.getElementById("msgBox").innerHTML = `<div class="msg error">Hata: ${error.message}</div>`;
+    return;
+  }
+
+  wrap.innerHTML = `<label style="margin-top:10px">Kullanılan Malzeme Miktarları</label>` +
+    items.map(it => `
+      <div class="form-row" data-ing-id="${it.ingredient_id}" data-price="${it.ingredients.price}" data-unit="${it.ingredients.unit}">
+        <div style="max-width:220px; display:flex; align-items:center;">${it.ingredients.name} (${it.ingredients.unit}) - ${Number(it.ingredients.price).toFixed(2)} TL/${it.ingredients.unit}</div>
+        <div style="max-width:150px">
+          <input type="number" step="0.01" min="0" class="used-qty" value="${it.quantity}">
+        </div>
+      </div>
+    `).join("");
+});
+
+document.getElementById("calcBtn").addEventListener("click", () => {
+  const msgBox = document.getElementById("msgBox");
+  msgBox.innerHTML = "";
+
+  const outputQty = parseFloat(document.getElementById("outputQty").value);
+  const rows = document.querySelectorAll("#ingredientInputs .form-row");
+
+  if (!rows.length) { msgBox.innerHTML = `<div class="msg error">Önce bir yemek seç.</div>`; return; }
+  if (!outputQty || outputQty <= 0) { msgBox.innerHTML = `<div class="msg error">Üretilen miktarı gir (kg).</div>`; return; }
+
+  let total = 0;
+  rows.forEach(row => {
+    const price = parseFloat(row.dataset.price);
+    const qty = parseFloat(row.querySelector(".used-qty").value) || 0;
+    total += price * qty;
+  });
+
+  const perKg = total / outputQty;
+
+  document.getElementById("totalCost").textContent = total.toFixed(2) + " TL";
+  document.getElementById("prodCost").textContent = total.toFixed(2) + " TL";
+  document.getElementById("perKgCost").textContent = perKg.toFixed(2) + " TL/kg";
+  document.getElementById("resultBox").style.display = "block";
+});
+
+init();
+</script>
+
+</body>
+</html>
